@@ -41,7 +41,7 @@ import cv2
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
+from matplotlib import colormaps
 
 
 def parse_args():
@@ -172,7 +172,7 @@ def plot_spaghetti(background, trajectories, output_path, pixels_per_meter=None,
     fig, ax = plt.subplots(figsize=(w / 100, h / 100), dpi=100)
     ax.imshow(bg_rgb, extent=[0, w, h, 0])
 
-    colors = cm.get_cmap("tab20", max(len(trajectories), 1))
+    colors = colormaps["tab20"]
 
     for i, (tid, pts) in enumerate(sorted(trajectories.items())):
         pts_sorted = sorted(pts, key=lambda p: p[0])
@@ -207,7 +207,7 @@ def make_annotated_video(video_path, trajectories, output_path, min_track_len):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = cv2.VideoWriter(output_path, fourcc, fps, (w, h))
 
-    colors = cm.get_cmap("tab20", max(len(trajectories), 1))
+    colors = colormaps["tab20"]
     id_color = {}
     for i, tid in enumerate(sorted(trajectories.keys())):
         c = colors(i % 20)
