@@ -79,8 +79,7 @@ python spaghetti_diagram.py \
   ByteTrack padrão.
 - **Câmera não perfeitamente ortogonal**: o script assume vista de cima
   sem grande distorção de perspectiva. Se a câmera tiver ângulo
-  significativo, o ideal é aplicar uma homografia (posso adicionar isso
-  na próxima iteração).
+  significativo, o ideal é aplicar uma homografia.
 - **Múltiplas câmeras**: este protótipo cobre uma câmera por vez. Fundir
   trajetórias de câmeras diferentes é um passo futuro.
 - **Vídeo ao vivo**: o script atual lê de um arquivo. Para stream RTSP/
