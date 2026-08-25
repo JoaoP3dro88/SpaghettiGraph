@@ -42,6 +42,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib import colormaps
+from scipy.signal import savgol_filter
 
 
 def parse_args():
@@ -65,6 +66,11 @@ def parse_args():
                         "saem em metros. Se omitido, fica em pixels.")
     p.add_argument("--make-video", action="store_true",
                    help="Também gera um vídeo anotado com caixas, IDs e rastros crescendo.")
+    p.add_argument("--smooth-window", type=int, default=15,
+                   help="Tamanho da janela do filtro de suavização (deve ser ímpar). "
+                        "0 desativa a suavização e mantém o traço bruto. Padrão: 15.")
+    p.add_argument("--smooth-polyorder", type=int, default=2,
+                   help="Ordem do polinômio do filtro Savitzky-Golay (padrão: 2, suave e sem distorcer curvas).")
     p.add_argument("--background", choices=["median", "first", "last"], default="median",
                    help="Como gerar a imagem de fundo para desenhar as trajetórias por cima.")
     p.add_argument("--max-frames-for-bg", type=int, default=30,
@@ -149,6 +155,27 @@ def track_people(video_path, model_name, conf, iou, tracker_cfg, skip_frames):
     return trajectories
 
 
+def smooth_trajectory(xs, ys, window=15, polyorder=2):
+    """Suaviza uma trajetória com o filtro Savitzky-Golay, que reduz o
+    'tremor' de detecção frame a frame sem cortar curvas reais do caminho.
+
+    Se a trajetória for curta demais para a janela pedida, a janela é
+    reduzida automaticamente (sempre ímpar e > polyorder)."""
+    n = len(xs)
+    if window <= 0 or n < 5:
+        return xs, ys
+
+    w = min(window, n if n % 2 == 1 else n - 1)
+    if w <= polyorder:
+        w = polyorder + 1 if (polyorder + 1) % 2 == 1 else polyorder + 2
+    if w > n:
+        return xs, ys  # trajetória curta demais mesmo após ajuste, mantém bruto
+
+    xs_smooth = savgol_filter(xs, window_length=w, polyorder=polyorder)
+    ys_smooth = savgol_filter(ys, window_length=w, polyorder=polyorder)
+    return xs_smooth, ys_smooth
+
+
 def filter_short_tracks(trajectories, min_len):
     return {tid: pts for tid, pts in trajectories.items() if len(pts) >= min_len}
 
@@ -165,7 +192,8 @@ def save_raw_csv(trajectories, output_path, pixels_per_meter=None):
     return df
 
 
-def plot_spaghetti(background, trajectories, output_path, pixels_per_meter=None, title=None):
+def plot_spaghetti(background, trajectories, output_path, pixels_per_meter=None, title=None,
+                    smooth_window=15, smooth_polyorder=2):
     h, w = background.shape[:2]
     bg_rgb = cv2.cvtColor(background, cv2.COLOR_BGR2RGB)
 
@@ -178,6 +206,7 @@ def plot_spaghetti(background, trajectories, output_path, pixels_per_meter=None,
         pts_sorted = sorted(pts, key=lambda p: p[0])
         xs = [p[1] for p in pts_sorted]
         ys = [p[2] for p in pts_sorted]
+        xs, ys = smooth_trajectory(xs, ys, window=smooth_window, polyorder=smooth_polyorder)
         color = colors(i % 20)
         ax.plot(xs, ys, linewidth=1.8, alpha=0.85, color=color, label=f"ID {tid}")
         ax.scatter([xs[0]], [ys[0]], color=color, marker="o", s=40, edgecolors="black", zorder=5)   # início
@@ -196,7 +225,8 @@ def plot_spaghetti(background, trajectories, output_path, pixels_per_meter=None,
     plt.close(fig)
 
 
-def make_annotated_video(video_path, trajectories, output_path, min_track_len):
+def make_annotated_video(video_path, trajectories, output_path, min_track_len,
+                          smooth_window=15, smooth_polyorder=2):
     """Gera um vídeo com os rastros sendo desenhados progressivamente,
     útil para apresentar a demanda de forma visual."""
     cap = cv2.VideoCapture(video_path)
@@ -213,9 +243,20 @@ def make_annotated_video(video_path, trajectories, output_path, min_track_len):
         c = colors(i % 20)
         id_color[tid] = tuple(int(c[k] * 255) for k in (2, 1, 0))  # RGB->BGR
 
+    # Suaviza cada trajetória inteira antes de indexar por frame, para o
+    # rastro desenhado no vídeo já sair sem o jitter de detecção.
+    smoothed_trajectories = {}
+    for tid, pts in trajectories.items():
+        pts_sorted = sorted(pts, key=lambda p: p[0])
+        frame_idxs = [p[0] for p in pts_sorted]
+        xs = [p[1] for p in pts_sorted]
+        ys = [p[2] for p in pts_sorted]
+        xs, ys = smooth_trajectory(xs, ys, window=smooth_window, polyorder=smooth_polyorder)
+        smoothed_trajectories[tid] = list(zip(frame_idxs, xs, ys))
+
     # index: frame_idx -> lista de (tid, x, y)
     by_frame = defaultdict(list)
-    for tid, pts in trajectories.items():
+    for tid, pts in smoothed_trajectories.items():
         for frame_idx, x, y in pts:
             by_frame[frame_idx].append((tid, x, y))
 
@@ -278,7 +319,8 @@ def main():
     save_raw_csv(trajectories, csv_path, pixels_per_meter=args.pixels_per_meter)
 
     png_path = os.path.join(args.output_dir, "grafico_espaguete.png")
-    plot_spaghetti(background, trajectories, png_path, pixels_per_meter=args.pixels_per_meter)
+    plot_spaghetti(background, trajectories, png_path, pixels_per_meter=args.pixels_per_meter,
+                   smooth_window=args.smooth_window, smooth_polyorder=args.smooth_polyorder)
 
     bg_path = os.path.join(args.output_dir, "fundo_referencia.png")
     cv2.imwrite(bg_path, background)
@@ -286,7 +328,8 @@ def main():
     if args.make_video:
         print("[5/5] Gerando vídeo anotado (pode demorar um pouco)...")
         video_out_path = os.path.join(args.output_dir, "video_anotado.mp4")
-        make_annotated_video(args.video, trajectories, video_out_path, args.min_track_len)
+        make_annotated_video(args.video, trajectories, video_out_path, args.min_track_len,
+                              smooth_window=args.smooth_window, smooth_polyorder=args.smooth_polyorder)
     else:
         print("[5/5] Vídeo anotado pulado (use --make-video para gerar).")
 

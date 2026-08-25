@@ -47,6 +47,8 @@ Isso gera, em `./output`:
 | `--min-track-len 15` | Descarta rastros muito curtos (ruído/detecção passageira). |
 | `--make-video` | Gera também um vídeo com os rastros sendo desenhados ao vivo. |
 | `--pixels-per-meter 40` | Se você souber a escala (ex: 40px = 1 metro no vídeo), os eixos saem em metros. |
+| `--smooth-window 15` | Tamanho da janela de suavização (Savitzky-Golay). Maior = mais suave, mas pode "cortar" curvas fechadas de verdade. `0` desativa e mantém o traço bruto. |
+| `--smooth-polyorder 2` | Ordem do polinômio da suavização. `2` funciona bem na maioria dos casos. |
 | `--background median\|first\|last` | Como montar a imagem de fundo. `median` tende a "sumir" com as pessoas, deixando só o ambiente. |
 
 Exemplo mais completo:
