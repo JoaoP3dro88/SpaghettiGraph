@@ -1,0 +1,4 @@
+/backend/venv
+/backend/torch-2.6.0+cu124-cp312-cp312-win_amd64.whl
+/backend/torchvision-0.21.0+cu124-cp312-cp312-win_amd64.whl
+/.vscode
