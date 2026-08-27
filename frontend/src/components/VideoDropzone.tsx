@@ -67,7 +67,7 @@ export default function VideoDropzone({ file, onFileSelected, error }: VideoDrop
         className={`
           relative cursor-pointer rounded-sm border-2 border-dashed
           px-6 py-14 text-center transition-colors
-          focus-visible:outline focus-visible:outline-2 focus-visible:outline-safety focus-visible:outline-offset-2
+          focus-visible:outline focus-visible:outline-safety focus-visible:outline-offset-2
           ${isDragActive ? 'border-safety bg-safety/5' : 'border-steel/50 bg-white/60 hover:border-steel'}
         `}
       >
